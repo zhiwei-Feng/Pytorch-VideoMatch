@@ -12,20 +12,17 @@ from log import logger
 
 
 class Davis(Dataset):
-
-    years = '2016', '2017', 'all'
     modes = 'train', 'val', 'trainval'
 
-    def __init__(self, base_dir, year='2016', mode='train', use_seq=None):
+    def __init__(self, base_dir, mode='train', use_seq=None):
         super().__init__()
 
-        assert(year in self.years)
-        assert(mode in self.modes)
+        assert (mode in self.modes)
 
         self._base_dir = base_dir
         self._annotations_dir = os.path.join(self._base_dir, "Annotations", "480p")
         self._images_dir = os.path.join(self._base_dir, "JPEGImages", "480p")
-        self._image_sets_dir = os.path.join(self._base_dir, "ImageSets")
+        self._image_sets_dir = os.path.join(self._base_dir, "ImageSets", "480p")
 
         alldirs = self._annotations_dir, self._images_dir, self._image_sets_dir
         checkdirs = [os.path.isdir(d) for d in alldirs]
@@ -33,25 +30,28 @@ class Davis(Dataset):
             raise ValueError("This is not expected DAVIS dataset dir structure, "
                              "you need the following dirs: \n\t{}".format("\n\t".join(alldirs)))
 
-        self.year = [year] if year in self.years[:-1] else self.years[:-1]
         self.mode = [mode] if mode in self.modes[:-1] else self.modes[:-1]
 
         self.seq_names = []
-        for y in self.year:
-            for m in self.mode:
-                filepath = os.path.join(self._image_sets_dir, y, m + ".txt")
-                with open(filepath) as file:
-                    self.seq_names.extend(s.strip() for s in file.readlines())
 
-        # 2016 and 2017 davis datasets contain duplicates
+        for m in self.mode:
+            filepath = os.path.join(self._image_sets_dir, m + ".txt")
+            with open(filepath) as file:
+                # self.seq_names.extend(s.strip() for s in file.readlines())
+                for s in file.readlines():
+                    # s: /JPEGImages/480p/bear/00000.jpg /Annotations/480p/bear/00000.png
+                    name = s.strip().split()[0].split("/")[3]  # ex: bear
+                    self.seq_names.append(name)
+
+        # davis datasets contain duplicates
         self.seq_names = set(self.seq_names)
 
         if use_seq is not None:
             # check if specified sequences are valid
             use_seq = set(use_seq)
             if not use_seq.issubset(self.seq_names):
-                raise RuntimeError("Specified set of sequence names isn't subset of loaded DAVIS dataset (year: {}),"
-                                   "\ngiven: {},\nvalid: {}".format(self.year, use_seq, self.seq_names))
+                raise RuntimeError("Specified set of sequence names isn't subset of loaded DAVIS dataset (year: 2016),"
+                                   "\ngiven: {},\nvalid: {}".format(use_seq, self.seq_names))
 
             # only use specified sequences
             self.seq_names = use_seq & self.seq_names
@@ -68,8 +68,8 @@ class Davis(Dataset):
         img_path, ann_path = self.sequences[seq_idx][frame_idx]
 
         # load image and annotation with PIL
-        img = Image.open(img_path)
-        ann = Image.open(ann_path)
+        img = Image.open(img_path).convert("RGB")
+        ann = Image.open(ann_path).convert("L")
 
         frame = Frame(self.sequences[seq_idx], frame_idx, img, ann)
 
@@ -90,11 +90,13 @@ class Sequence:
         self._ann_dir = os.path.join(base_ann_dir, name)
         self._img_dir = os.path.join(base_img_dir, name)
 
+        # print("name:{}, _ann_dir:{}, _img_dir:{}".format(self.name, self._ann_dir, self._img_dir))
+        # console> name:bear, _ann_dir:./DAVIS\Annotations\480p\bear, _img_dir:./DAVIS\JPEGImages\480p\bear
+
         frame_imgs = [os.path.join(self._img_dir, frame_no) for frame_no in sorted(os.listdir(self._img_dir))]
         frame_anns = [os.path.join(self._ann_dir, frame_no) for frame_no in sorted(os.listdir(self._ann_dir))]
 
-        # TODO: simple check, maybe check also matching filenames...
-        assert(len(frame_imgs) == len(frame_anns))
+        assert (len(frame_imgs) == len(frame_anns))
 
         self.frames = [(img, ann) for img, ann in zip(frame_imgs, frame_anns)]
 
@@ -104,7 +106,6 @@ class Sequence:
     def __getitem__(self, idx):
         return self.frames[idx]
 
-    # TODO: this compares sequences by name (string), is there a performance hit?
     def __eq__(self, other):
         return other is not None and self.name == other.name
 
@@ -179,6 +180,10 @@ if __name__ == '__main__':
 
     ps = iter(ps)
     pair_i = next(ps)
+    print(pair_i)
     first_pair = davis[pair_i[0]], davis[pair_i[1]]
-    print("First frames shapes = ", first_pair[0][0].shape, first_pair[0][1].shape)
-    print("Second frames shapes = ", first_pair[1][0].shape, first_pair[1][1].shape)
+    ref_frame: Frame = first_pair[0]
+    test_frame: Frame = first_pair[1]
+    print(ref_frame.seq, ref_frame.frame_idx, ref_frame.img, ref_frame.ann)
+    print("First frames shapes = ", ref_frame.img.size, ref_frame.ann.size)
+    print("Second frames shapes = ", test_frame.img.size, test_frame.ann.size)

@@ -147,7 +147,7 @@ def main():
 
     device = None if cuda_dev is None else "cuda:{:d}".format(cuda_dev)
 
-    dataset = Davis(davis_dir, year, dataset_mode, seq_names)
+    dataset = Davis(davis_dir, dataset_mode, seq_names)
 
     vm = VideoMatch(out_shape=seg_shape, device=device, encoder=encoder, upsample_fac=upsample_fac)
     if model_load_path is not None:
