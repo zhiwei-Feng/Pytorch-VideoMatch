@@ -18,6 +18,6 @@ def init_logging(level='debug'):
         raise ValueError("Logging level {} unknown".format(level))
 
     ch = logging.StreamHandler(sys.stdout)
-    stdout_formatter = logging.Formatter('%(levelname)7s [%(filename)15s:%(lineno)03d]:\t%(message)s')
+    stdout_formatter = logging.Formatter('%(levelname)7s %(asctime)s [%(filename)15s:%(lineno)03d]:\t%(message)s')
     ch.setFormatter(stdout_formatter)
     logger.addHandler(ch)
