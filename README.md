@@ -26,7 +26,7 @@ Currently only batch size of 1 is supported for training because of the implemen
 
 Example:
 ```bash
-python3 main.py -c 0 -m train -t train -s models/vm_vgg.pth -p 416 790 -l 1e-5 -x
+python main.py -c 0 -m train -t train -s models/vm_resnet.pth -p 416 790 -l 1e-5 -x -en resnet
 ```
 ## Eval
 You can also generate segmentation image results for evaluation and video result.

@@ -10,6 +10,7 @@ from PIL import Image
 import torch
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch import optim
+from tqdm import tqdm
 
 from videomatch import VideoMatch
 from davis import Davis, PairSampler, MultiFrameSampler, collate_pairs, collate_multiframes
@@ -53,7 +54,8 @@ def parse_args():
                         help="Learning rate for Adam (default: 0.00001)")
     parser.add_argument("--weight_decay", '-w', default=5e-4, type=float,
                         help="Weight decay for Adam (default: 0.0005)")
-    parser.add_argument("--validation_size", '-vs', default=0.0025, type=float, help="Validation set size (default: 0.0025)")
+    parser.add_argument("--validation_size", '-vs', default=0.0025, type=float,
+                        help="Validation set size (default: 0.0025)")
     parser.add_argument("--loss_function", '-lf', default='dice', choices=['bce', 'balancedbce', 'dice'], type=str,
                         help="Loss function for training the encoder (default: dice)")
 
@@ -87,7 +89,6 @@ def parse_args():
 
 
 def main():
-
     parsed_args = parse_args()
     init_logging(parsed_args.logger)
 
@@ -189,7 +190,6 @@ def main():
 
 def train_vm(data_loader, val_loader, vm, fp, device, lr, weight_decay, iters, epochs=1,
              val_report_iter=50, model_save_path=None, loss_visualize=False, loss_name="dice", fg_thresh=0.5):
-
     # set model to train mode
     vm.feat_net.train()
 
@@ -214,7 +214,8 @@ def train_vm(data_loader, val_loader, vm, fp, device, lr, weight_decay, iters, e
     # check videomatch avg val accuracy
     vm_avg_val_score = 0.
     with torch.set_grad_enabled(False):
-        for val_ref_frame, val_test_frame in val_loader:
+        for val_ref_frame, val_test_frame in tqdm(val_loader):
+            # todo: waiting for optimization, it takes too long, about 12min
             (ref_img, ref_mask), (test_img, test_mask) = fp(val_ref_frame, val_test_frame)
 
             vm.seq_init(ref_img, ref_mask)
@@ -242,7 +243,7 @@ def train_vm(data_loader, val_loader, vm, fp, device, lr, weight_decay, iters, e
         logger.debug("Epoch: \t[{}/{}]".format(epoch + 1, epochs))
 
         avg_loss = 0.
-        for i, (ref_frame, test_frame) in enumerate(data_loader):
+        for i, (ref_frame, test_frame) in tqdm(enumerate(data_loader)):
             if i >= iters or stop_training:
                 break
 
@@ -311,7 +312,7 @@ def dice_loss(input, target, smooth=1.):
 def balanced_CE_loss(y_pred, y_true, size_average=True):
     assert len(y_pred.shape) == len(y_true.shape)
 
-    mask_size = (y_true.shape[-1] * y_true.shape[-2]) # H * W
+    mask_size = (y_true.shape[-1] * y_true.shape[-2])  # H * W
     fg_num = torch.sum(y_true).float()
     bg_num = mask_size - fg_num
     fg_share = fg_num / mask_size
@@ -334,7 +335,6 @@ def balanced_CE_loss(y_pred, y_true, size_average=True):
 
 
 def eval_vm(data_loader, vm, img_shape, fg_thresh=0.5, remove_outliers=False, visualize=True, results_dir=None):
-
     # set model to eval mode
     vm.feat_net.eval()
 
@@ -435,13 +435,13 @@ def segmentation_accuracy(mask_pred, mask_true, fg_thresh=0.5):
 
 
 def segmentation_IOU(y_pred, y_true, fg_thresh=0.5):
-    mask_pred = (y_pred >= fg_thresh).byte()
-    mask_true = y_true.byte()
+    mask_pred = (y_pred >= fg_thresh).numpy().astype(np.bool)
+    mask_true = y_true.numpy().astype(np.bool)
 
-    if np.isclose(torch.sum(mask_pred), 0) and np.isclose(torch.sum(mask_true), 0):
+    if np.isclose(np.sum(mask_pred), 0) and np.isclose(np.sum(mask_true), 0):
         return 1
     else:
-        return torch.sum(mask_true & mask_pred) / torch.sum((mask_true | mask_pred)).float()
+        return np.sum((mask_true & mask_pred)) / np.sum((mask_true | mask_pred), dtype=np.float32)
 
 
 if __name__ == '__main__':

@@ -7,7 +7,6 @@ from log import logger
 
 
 class Encoder(nn.Module):
-
     ENCODER_TYPES = {"resnet": 0, "vgg": 1}
 
     def __init__(self, encoder_type="vgg", upsample_fac=1):
@@ -20,7 +19,7 @@ class Encoder(nn.Module):
         self.upsample_fac = upsample_fac
         self.encoder_type = self.ENCODER_TYPES[encoder_type]
         if self.encoder_type == 0:
-            self.feat_ext = resnet101(pretrained=True)
+            self.feat_ext = torch.hub.load('pytorch/vision:v0.6.0', 'deeplabv3_resnet101', pretrained=True).backbone
         else:
             self.feat_ext = self.load_vgg19()
 
@@ -44,13 +43,7 @@ class Encoder(nn.Module):
     def forward(self, x):
         # resnet
         if self.encoder_type == 0:
-            x = self.feat_ext.conv1(x)
-            x = self.feat_ext.bn1(x)
-            x = self.feat_ext.relu(x)
-            x = self.feat_ext.maxpool(x)
-
-            x = self.feat_ext.layer1(x)
-            x = self.feat_ext.layer2(x)
+            x = self.feat_ext(x)['out']
         # vgg
         else:
             x = self.feat_ext(x)
@@ -72,5 +65,4 @@ class Encoder(nn.Module):
         """
         :return: Model size in MegaBytes
         """
-        return sum(p.numel() for p in self.feat_ext.parameters() if p.requires_grad) * 32 / 4 / 2**20
-
+        return sum(p.numel() for p in self.feat_ext.parameters() if p.requires_grad) * 32 / 4 / 2 ** 20
